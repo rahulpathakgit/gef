@@ -1,9 +1,10 @@
-# Features
+# Features #
 
 This page will explain in details some non-trivial commands available in `GEF`
 with examples and screenshots to make it easier to reproduce.
 
-## `context` command
+## `context` command ##
+
 ![gef-x86](https://pbs.twimg.com/media/BvdRAJKIUAA8R6_.png:large)
 
 
@@ -23,7 +24,7 @@ menu when hitting a breakpoint.
   instructions to be executed.
 
 
-## `entry-break` command
+## `entry-break` command ##
 
 The `entry-break` goal is to find and break at the most obvious entry point
 available in the binary. Since the binary will start running, some of the `PLT`
@@ -41,7 +42,7 @@ It will perform the following actions:
 ![entry-break-example](https://i.imgur.com/zXSERMh.png)
 
 
-## `patch` command
+## `patch` command ##
 
 The `patch` command allows to easily bypass a call or syscall. The syntax is as
 following:
@@ -85,7 +86,7 @@ gef> patch -r 0 0x400596
 ![after-patch](https://i.imgur.com/iEZVJWb.png)
 
 
-## `xinfo`/`vmmap`/`xfiles` commands
+## `xinfo`/`vmmap`/`xfiles` commands ##
 
 `xinfo`, `vmmap` and `xfiles` display a comprehensive and human-friendly memory
 mapping of either the process or a specific location.
@@ -101,29 +102,98 @@ Read/Write/Execute.
 ![xinfo-example](https://pbs.twimg.com/media/CCSW9JkW4AAx8gD.png:large)
 
 
-## `heap` command
+## `heap` command ##
 
 `heap` command provides information on the heap chunk specified as argument. For
 the moment, it only supports GlibC heap format (see
 [this link](http://code.woboq.org/userspace/glibc/malloc/malloc.c.html#malloc_chunk)
-for  `malloc` structure information). Syntax is pretty straight forward
+for  `malloc` structure information). Syntax to the
+subcommands is pretty straight forward :
 
 ```
-gef> heap [LOCATION]
+gef> heap <sub_commands>
 ```
 
-will display information like this
+### `heap chunk` command ###
 
-![heap-example](https://i.imgur.com/xPcnzWp.png)
+This command gives visual information of a Glibc malloc-ed chunked. Simply
+provide the address to the user memory pointer of the chunk to show the
+information related to the current chunk:
 
-## `shellcode` command
+```
+gef> heap chunk <LOCATION>
+```
+
+![heap-chunks](https://i.imgur.com/SAWNptW.png)
+
+
+### `heap arenas` command ###
+
+Multi-threaded programs have different arenas, and the only knowledge of the
+`main_arena` is not enough.
+`gef` therefore provides the `arena` sub-commands to help you list all the
+arenas allocated in your program **at the moment you call the command**.
+
+![heap-arena](https://i.imgur.com/ajbLiCF.png)
+
+
+### `heap bins` command ###
+
+Glibc bins are the structures used for keeping tracks of free-ed chunks. The
+reason for that is that allocation (using `sbrk`) is costly. So Glibc uses those
+bins to remember formely allocated chunks. Because bins are structured in single
+or doubly linked list, I found that quite painful to always interrogate `gdb` to
+get a pointer address, dereference it, get the value chunk, etc... So I
+decided to implement in `gef` the `heap bins` sub-command, which allows to get info on:
+
+   - `fastbins`
+   - `bins`
+      - `unsorted`
+      - `small bins`
+      - `large bins`
+
+
+#### `heap bins fast` command ####
+
+When exploiting heap corruption vulnerabilities, it is sometimes convenient to
+know the state of the `fastbinsY` array.
+The `fast` sub-command helps by displaying the list of fast chunks in this
+array. Without any other argument, it will display the info of the `main_arena`
+arena. It accepts an optional argument, the address of another arena (which you
+can easily find using `heap arenas`).
+
+```
+gef➤ heap bins fast
+[+] FastbinsY of arena 0x7ffff7dd5b20
+Fastbin[0] 0x00
+Fastbin[1]  →  FreeChunk(0x600310)  →  FreeChunk(0x600350)
+Fastbin[2] 0x00
+Fastbin[3] 0x00
+Fastbin[4] 0x00
+Fastbin[5] 0x00
+Fastbin[6] 0x00
+Fastbin[7] 0x00
+Fastbin[8] 0x00
+Fastbin[9] 0x00
+```
+
+#### Other `heap bins X` command ####
+
+All the other subcommands for the `heap bins` works the same way than `fast`. If
+no argument is provided, `gef` will fall back to `main_arena`. Otherwise, it
+will use the address pointed as the base of the `malloc_state` structure and
+print out information accordingly.
+
+
+
+## `shellcode` command ##
 
 `shellcode` is a command line client for @JonathanSalwan shellcodes database. It
 can be used to search and download directly via `GEF` the shellcode you're
 looking for. Two primitive subcommands are available, `search` and `get`
 
 ```
-gef> shellcode search arm
+gef➤ shellcode search arm
 [+] Showing matching shellcodes
 901     Linux/ARM       Add map in /etc/hosts file - 79 bytes
 853     Linux/ARM       chmod("/etc/passwd", 0777) - 39 bytes
@@ -132,10 +202,10 @@ gef> shellcode search arm
 729     Linux/ARM       Bind Connect UDP Port 68
 730     Linux/ARM       Bindshell port 0x1337
 [...]
-gef> shellcode get 698
+gef➤ shellcode get 698
 [+] Downloading shellcode id=698
 [+] Shellcode written as '/tmp/sc-EfcWtM.txt'
-gef> system cat /tmp/sc-EfcWtM.txt
+gef➤ system cat /tmp/sc-EfcWtM.txt
 /*
 Title:     Linux/ARM - execve("/bin/sh", [0], [0 vars]) - 27 bytes
 Date:      2010-09-05
@@ -148,7 +218,7 @@ Shellcode ARM without 0x20, 0x0a and 0x00
 [...]
 ```
 
-## `format-string-helper` command
+## `format-string-helper` command ##
 
 `format-string-helper` command will create a `GEF` specific type of breakpoints
 dedicated to detecting potentially insecure format string when using the GlibC
@@ -164,12 +234,12 @@ It will use this new breakpoint against several targets, including:
 
 Just call the command to enable this functionality. `fmtstr-helper` is an alias of `format-string-helper`.
 ```
-gef> fmtstr-helper
+gef➤ fmtstr-helper
 ```
 
 Then start the binary execution.
 ```
-gef> g
+gef➤ g
 ```
 
 If a potentially insecure entry is found, the breakpoint will trigger, stop the
@@ -178,12 +248,12 @@ process execution, display the reason for trigger and the associated context.
 ![fmtstr-helper-example](https://i.imgur.com/INU3KGn.png)
 
 
-## `gef-remote` debugging
+## `gef-remote` debugging ##
 
 It is possible to use `gef` in a remote debugging environment.
 
 
-### With a local copy
+### With a local copy ###
 
 If you want to remotely debug a binary that you already have, you simply need to
 specify to `gdb` where to find the debug information.
@@ -210,7 +280,7 @@ gef> target remote 192.168.56.1:1234
 ```
 
 
-### Without a local copy
+### Without a local copy ###
 
 It is possible to use `gdb` internal functions to copy our targeted binary.
 
@@ -241,7 +311,7 @@ and such. This makes the entire remote debugging process (particularly for Andro
 a child game.
 
 
-## `capstone-disassemble` command
+## `capstone-disassemble` command ##
 
 If you have installed [`capstone`](http://capstone-engine.org) library and its
 Python bindings, you can use it to disassemble any location in your debugging
@@ -258,7 +328,7 @@ gef> cs main
 ![cs-disassemble](https://i.imgur.com/wypt7Fo.png)
 
 
-## `set-permission` command
+## `set-permission` command ##
 
 This command was added to facilitate the exploitation process, by changing the
 permission rights on a specific page directly from the debugger.
@@ -280,7 +350,7 @@ popad
 A breakpoint is added following this stub, which when hit will restore the
 original context, allowing you to resume execution.
 
-`mprotect` is a `gef` for `set-permission`. For example, to set the `stack` as
+`mprotect` is an alias for `set-permission`. As an example, to set the `stack` as
 READ|WRITE|EXECUTE on this binary,
 
 ![mprotect-before](https://i.imgur.com/RRYHxzW.png)
@@ -291,17 +361,19 @@ Simply run
 gef> mprotect 0xfffdd000
 ```
 
-Et voilà !
+Et voilà ! `gef` will use the memory runtime information to correctly adjust the protection
+of the entire section.
 
 ![mprotect-after](https://i.imgur.com/9MvyQi8.png)
 
+Or for a full demo video on a PowerPC VM: [![asciicast](https://asciinema.org/a/54noulja01k3cgctawjeio8xl.png)](https://asciinema.org/a/54noulja01k3cgctawjeio8xl)
 
-## `assemble` command
 
-If you have installed [`radare2`](http://radare.org) and `rasm2` binary can be
-found in your system $PATH, then `gef` will provide a convenient command to
-assemble native instructions directly to opcodes of the architecture you are
-currently debugging.
+## `assemble` command ##
+
+If you have installed [`keystone`](http://www.keystone-engine.org/), then `gef` will provide
+a convenient command to assemble native instructions directly to opcodes of the
+architecture you are currently debugging.
 
 Call it via `assemble` or its alias `asm`:
 
@@ -309,10 +381,10 @@ Call it via `assemble` or its alias `asm`:
 gef> asm main
 ```
 
-![r2-assemble](https://i.imgur.com/ShuPF6h.png)
+![gef-assemble](https://i.imgur.com/ShuPF6h.png)
 
 
-## `unicorn` command
+## `unicorn` command ##
 
 If you have installed [`unicorn`](http://unicorn-engine.org) emulation engine
 and its Python bindings, `gef` integrates a new command to emulate instructions
@@ -350,7 +422,7 @@ script embedding your current execution context, ready to be re-used outside
 powered with a SMT for instance.
 
 
-## `trace-run` command
+## `trace-run` command ##
 
 The `trace-run` is meant to be provide a visual appreciation directly in IDA
 disassembler of the path taken by a specific execution. It should be used with
@@ -372,7 +444,7 @@ color the path taken:
 ![trace-run-2](http://i.imgur.com/oAGoSMQ.png)
 
 
-## `edit-flags` command
+## `edit-flags` command ##
 
 The `edit-flags` command (alias: `flags`) provides a quick and comprehensible
 way to view and edit the flag register for the architectures that support it.
@@ -393,3 +465,68 @@ For instance, on x86 architecture, if we don't want to take a conditional jump
 gef> flags -ZERO +CARRY
 ```
 ![flags](https://i.imgur.com/ro7iC5m.png)
+
+
+## `search-pattern` command ##
+
+`gef` allows you to search for a specific pattern at runtime in all the segments
+of your process memory layout. The command `search-pattern`, alias `grep`, aims
+to be straight-forward to use:
+```
+gef> search-pattern MyPattern
+```
+
+![grep](https://camo.githubusercontent.com/79c14e46fd1c1616cacab37d88b49aae7e00560e/68747470733a2f2f692e696d6775722e636f6d2f656e78456451642e706e67)
+
+
+
+## `ida-interact` command ##
+
+`gef` provides a simple XML-RPC client designed to communicate with a server
+running inside a specific IDA Python plugin, called `ida_gef_xmlrpc.py` (which
+can be downloaded freely
+[here](https://github.com/hugsy/stuff/blob/master/ida_scripts/ida_gef_xmlrpc.py)).
+
+Simply download this script, and run it inside IDA. When the server is running,
+you will see a text in the Output Window such as:
+
+```
+[+] Creating new thread for XMLRPC server: Thread-1
+[+] Starting XMLRPC server: 0.0.0.0:1337
+[+] Registered 6 functions.
+```
+
+This indicates that the XML-RPC server is ready and listening.
+
+`gef` can interact with it via the command `ida-interact`. This command receives
+as first argument the name of the function to execute, all the other arguments
+are the arguments of the remote function.
+
+To enumerate the functions available, simply run
+```
+gef➤  ida-interact -h
+```
+![gef-ida-help](https://i.imgur.com/JFNBfjY.png)
+
+Now, to execute an RPC, invoke the command `ida-interact` on the desired method,
+with its arguments (if required).
+
+For example:
+```
+gef➤  ida ida.set_color 0x40061E
+```
+will edit the remote IDB and set the background color of the location 0x40061E
+with the color 0x005500 (default value).
+
+Another convenient example is to add comment inside IDA directly from `gef`:
+```
+gef➤  ida ida.add_comment 0x40060C "<<<--- stack overflow"
+[+] Success
+```
+
+Result:
+
+![gef-ida-example](https://i.imgur.com/jZ2eWG4.png)
+
+Please use the `--help` argument to see all the methods available and their
+syntax.
